@@ -47,11 +47,7 @@ import { AShare, DShare, EncryptedNShare, OShare, SendShareType, SShare, WShare 
 import { createShareProof, generateGPGKeyPair, getBitgoGpgPubKey, getTrustGpgPubKey } from '../../opengpgUtils';
 import { BitGoBase } from '../../../bitgoBase';
 import { BackupProvider, IWallet } from '../../../wallet';
-import {
-  buildNShareFromAPIKeyShare,
-  getParticipantFromIndex,
-  verifyWalletSignature,
-} from '../../../tss/ecdsa/ecdsa';
+import { buildNShareFromAPIKeyShare, getParticipantFromIndex, verifyWalletSignature } from '../../../tss/ecdsa/ecdsa';
 import { signMessageWithDerivedEcdhKey, verifyEcdhSignature } from '../../../ecdh';
 import { getTxRequestChallenge } from '../../../tss/common';
 import {
@@ -62,13 +58,13 @@ import {
 } from '../../../tss/types';
 import {
   getSignatureShareRoundOne,
-  getSignatureShareRoundThree,
+  getSignatureShareRoundFour,
   getSignatureShareRoundTwo,
   verifyBitGoMessagesAndSignaturesRoundOne,
   verifyBitGoMessagesAndSignaturesRoundTwo,
-} from "../../../tss/ecdsa/dkls";
+} from '../../../tss/ecdsa/dkls';
 
-import { MPCv2SignatureShareRound1Output, MPCv2SignatureShareRound2Output } from "../../../tss/ecdsa/dkls-types";
+import { MPCv2SignatureShareRound1Output, MPCv2SignatureShareRound2Output } from '../../../tss/ecdsa/dkls-types';
 
 const encryptNShare = ECDSAMethods.encryptNShare;
 
@@ -1115,20 +1111,29 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
       bitgoGpgPubkey
     );
 
-    /** Round 3 **/
+    /** Round 4 **/
     const deserializedMessagesRoundTwo = DklsTypes.deserializeMessages(serializedBitGoToUserMessagesRoundTwo);
-    const userToBitGoMessages4 = otherSigner.handleIncomingMessages(deserializedMessagesRoundTwo);
-    const signatureShareRoundThree = await getSignatureShareRoundThree(
-      userToBitGoMessages4,
-      userGpgKey,
-      bitgoGpgPubkey
-    );
+    const userToBitGoMessages4 = otherSigner.handleIncomingMessages({
+      p2pMessages: deserializedMessagesRoundTwo.p2pMessages,
+      broadcastMessages: [],
+    });
+    // Verify if the signature combine is valid. If not, quit the signing process.
+    try {
+      otherSigner.handleIncomingMessages({
+        p2pMessages: [],
+        broadcastMessages: deserializedMessagesRoundTwo.broadcastMessages,
+      });
+    } catch (e) {
+      throw new Error('Combining DKLS partial signatures failed');
+    }
+
+    const signatureShareRoundFour = await getSignatureShareRoundFour(userToBitGoMessages4, userGpgKey, bitgoGpgPubkey);
     // Submit for final signature share combine
     await sendSignatureShare(
       this.bitgo,
       txRequest.walletId,
       txRequest.txRequestId,
-      signatureShareRoundThree,
+      signatureShareRoundFour,
       RequestType.tx,
       undefined,
       'ecdsa',
