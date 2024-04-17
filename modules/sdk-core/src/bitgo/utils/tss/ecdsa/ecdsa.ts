@@ -1031,16 +1031,8 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
         : params.txRequest;
 
     let derivationPath = '';
-    const userGpgKey = await openpgp.generateKey({
-      userIDs: [
-        {
-          name: 'user',
-          email: txRequest.userId,
-        },
-      ],
-      curve: 'secp256k1',
-    });
-    const bitgoGpgPubkey = await getBitgoGpgPubKey(this.bitgo);
+    const userGpgKey = await generateGPGKeyPair('secp256k1');
+    const bitgoGpgPubKey = await getBitgoGpgPubKey(this.bitgo);
 
     if (requestType === RequestType.tx) {
       assert(txRequest.transactions || txRequest.unsignedTxs, 'Unable to find transactions in txRequest');
@@ -1054,7 +1046,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
     const otherSigner = new DklsDsg.Dsg(userKeyShare, 0, derivationPath, hash);
     const userSignerBroadcastMsg1 = await otherSigner.init();
     const signatureShareRound1 = await getSignatureShareRoundOne(userSignerBroadcastMsg1, userGpgKey);
-    const roundOneBitGoRes = await sendSignatureShare(
+    await sendSignatureShare(
       this.bitgo,
       txRequest.walletId,
       txRequest.txRequestId,
@@ -1065,15 +1057,20 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
       'full',
       userGpgKey.publicKey
     );
+    let latestTxRequest = await getTxRequest(this.bitgo, txRequest.walletId, txRequest.txRequestId);
+    assert(latestTxRequest.transactions);
+    const bitgoToUserMessages1And2 = latestTxRequest.transactions[0].signatureShares;
     // TODO: Use codec for parsing
-    const parsedBitGoToUserSigShareRoundOne = JSON.parse(roundOneBitGoRes.share) as MPCv2SignatureShareRound1Output;
+    const parsedBitGoToUserSigShareRoundOne = JSON.parse(
+      bitgoToUserMessages1And2[0].share
+    ) as MPCv2SignatureShareRound1Output;
     if (parsedBitGoToUserSigShareRoundOne.type !== 'round1Output') {
       throw new Error('Unexpected signature share response. Unable to parse data.');
     }
     const serializedBitGoToUserMessagesRoundOne = await verifyBitGoMessagesAndSignaturesRoundOne(
       parsedBitGoToUserSigShareRoundOne,
       userGpgKey,
-      bitgoGpgPubkey
+      bitgoGpgPubKey,
     );
 
     /** Round 2 **/
@@ -1090,9 +1087,9 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
       userToBitGoMessages2,
       userToBitGoMessages3,
       userGpgKey,
-      bitgoGpgPubkey
+      bitgoGpgPubKey
     );
-    const roundTwoBitGoRes = await sendSignatureShare(
+    await sendSignatureShare(
       this.bitgo,
       txRequest.walletId,
       txRequest.txRequestId,
@@ -1103,8 +1100,13 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
       'full',
       userGpgKey.publicKey
     );
+    latestTxRequest = await getTxRequest(this.bitgo, txRequest.walletId, txRequest.txRequestId);
+    assert(latestTxRequest.transactions);
+    const txRequestSignatureShares = latestTxRequest.transactions[0].signatureShares;
     // TODO: Use codec for parsing
-    const parsedBitGoToUserSigShareRoundTwo = JSON.parse(roundTwoBitGoRes.share) as MPCv2SignatureShareRound2Output;
+    const parsedBitGoToUserSigShareRoundTwo = JSON.parse(
+      txRequestSignatureShares[0].share
+    ) as MPCv2SignatureShareRound2Output;
     const serializedBitGoToUserMessagesRoundTwo = await verifyBitGoMessagesAndSignaturesRoundTwo(
       parsedBitGoToUserSigShareRoundTwo,
       userGpgKey,
@@ -1113,19 +1115,16 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
 
     /** Round 4 **/
     const deserializedMessagesRoundTwo = DklsTypes.deserializeMessages(serializedBitGoToUserMessagesRoundTwo);
-    const userToBitGoMessages4 = otherSigner.handleIncomingMessages({
-      p2pMessages: deserializedMessagesRoundTwo.p2pMessages,
-      broadcastMessages: [],
-    });
-    // Verify if the signature combine is valid. If not, quit the signing process.
-    try {
-      otherSigner.handleIncomingMessages({
-        p2pMessages: [],
-        broadcastMessages: deserializedMessagesRoundTwo.broadcastMessages,
-      });
-    } catch (e) {
-      throw new Error('Combining DKLS partial signatures failed');
-    }
+    const userToBitGoMessages4 = otherSigner.handleIncomingMessages(deserializedMessagesRoundTwo);
+    // // Verify if the signature combine is valid. If not, quit the signing process.
+    // try {
+    //   otherSigner.handleIncomingMessages({
+    //     p2pMessages: [],
+    //     broadcastMessages: deserializedMessagesRoundTwo.broadcastMessages,
+    //   });
+    // } catch (e) {
+    //   throw new Error('Combining DKLS partial signatures failed');
+    // }
 
     const signatureShareRoundFour = await getSignatureShareRoundFour(userToBitGoMessages4, userGpgKey, bitgoGpgPubkey);
     // Submit for final signature share combine
@@ -1152,7 +1151,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
    */
   async signTxRequest(params: TSSParams): Promise<TxRequest> {
     this.bitgo.setRequestTracer(params.reqId);
-    return this.signRequestBase(params, RequestType.tx);
+    return this.signTxRequestMpcV2(params, RequestType.tx);
   }
 
   /**
