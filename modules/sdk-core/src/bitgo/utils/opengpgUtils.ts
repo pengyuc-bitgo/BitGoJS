@@ -41,7 +41,9 @@ export async function getBitgoGpgPubKey(bitgo: BitGoBase): Promise<Key> {
     throw new Error('Unable to create MPC keys - bitgoPublicKey is missing from constants');
   }
 
-  const bitgoPublicKeyStr = constants.mpc.bitgoPublicKey as string;
+  // const bitgoPublicKeyStr = constants.mpc.bitgoPublicKey as string;
+  const bitgoPublicKeyStr =
+    '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxk8EZiF3CBMFK4EEAAoCAwQWD7Pa752fAl4z0PxfWVC05d89vfo80PyUQ3Er\nLXlhGLkik+NkAl/DBd8diN7i4kTvRoIo0xrHU+lZgdgt+ct5zRhoc20gPGhz\nbUB0ZXN0LmJpdGdvLmNvbT7ChAQTEwgANgUCZiF3CAILCQkQ5ycuezbbVOkC\nFQgCFgACGwMCHgEWIQRPr6GNiE7tRv0p4afnJy57NttU6QAAbAYA+wRvSLOa\ne0iREOx00HhYWP030GhN98BcZtehT9iTZMV8AP97Otkrtq6jby2f7PdEV7uv\nd4aikTa5BgnpKvl8yqL4ccKEBBATCAA2BQJmIXcKAgsJCRCZRBfch5MUcwIV\nCAIWAAIbAwIeARYhBAmXBS0TYEvmC/3L9JlEF9yHkxRzAABJ1wD+KyI1j9nu\nYWvDxwDB+JBGMt7mic77ajBOgaCabEZ0j1MA/2RCOiV2cOL3x1AOzosqofsh\niA1s9BpS14xAwrKJPwY+zlMEZiF3CBIFK4EEAAoCAwSgLs60kLzhHD3o1sDg\n0fQ/QHw6hgq9PQ5LvilUvuIGYDR79sPwrMuwy7wUcOQgJvwIOJHommDq5nj+\nKfgAtE6uAwEIB8KEBBgTCAA2BQJmIXcJAgsJCRDnJy57NttU6QIVCAIWAAIb\nDAIeARYhBE+voY2ITu1G/Snhp+cnLns221TpAADWmQD/bV9sBkwyYfYfJYTS\nqvTmubCesQDY5Ranv9wYvv7RiLQA/iwX6ZHwdbvQFVui0GrvV2iFaCHut1pn\nF4YCDqpUKidwzk8EZiF3CBMFK4EEAAoCAwTfm/HZxwvubP/rr2KOU88mkDL9\njcWjfQx1uFZ9mlIgMBV3++OgtkVE0eEe+lNWpwgksGOGrBWeQ3K0XRF0YlUp\nwsBKBBgTCAC8BQJmIXcJAgsJCRDnJy57NttU6QIVCAIWAAIbAgIeAYUgBBgT\nCAA2BQJmIXcJAgsJCRBrEMTq2oOYhgIVCAIWAAIbAgIeARYhBLFg1zIcwAmc\nRhGdOmsQxOrag5iGAAAxoAD/YNPhMmf3l4Qh7fprkmOjoU0CvFiiP+kcxTr9\nm9luVhUA/RvhIB4sqrAcSD7ZGVIQcEI14rdAFeok4Higz2cGf9R6FiEET6+h\njYhO7Ub9KeGn5ycuezbbVOkAAPnaAP0dYpya7EzvN5Q6RpIzqLFN9izyGt4Q\n6keZsvnVbW9qJAD9Fj7tAAMUbbstz/Kx9RY8qoIOFTuSwaeDXnJMrI9v84w=\n=uzVB\n-----END PGP PUBLIC KEY BLOCK-----\n';
   return await readKey({ armoredKey: bitgoPublicKeyStr });
 }
 
