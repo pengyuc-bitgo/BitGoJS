@@ -1024,7 +1024,6 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
     params: TSSParams | TSSParamsForMessage,
     requestType: RequestType
   ): Promise<TxRequest> {
-    const msg = 'dkls-testing';
     const userKeyShare = Buffer.from(params.prv, 'base64');
     const txRequest: TxRequest =
       typeof params.txRequest === 'string'
@@ -1032,6 +1031,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
         : params.txRequest;
 
     let derivationPath = '';
+    let msgToSign = '';
     const userGpgKey = await generateGPGKeyPair('secp256k1');
     const bitgoGpgPubKey = await getBitgoGpgPubKey(this.bitgo);
 
@@ -1039,6 +1039,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
       assert(txRequest.transactions || txRequest.unsignedTxs, 'Unable to find transactions in txRequest');
       const unsignedTx =
         txRequest.apiVersion === 'full' ? txRequest.transactions![0].unsignedTx : txRequest.unsignedTxs[0];
+      msgToSign = unsignedTx.signableHex;
       derivationPath = unsignedTx.derivationPath;
     } else if (requestType === RequestType.message) {
       throw new Error('DKLS message signing not supported yet.');
@@ -1050,11 +1051,11 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
     } catch (err) {
       hash = createKeccakHash('keccak256') as Hash;
     }
-    const hashBuffer = hash.update(msg).digest();
+    const hashBuffer = hash.update(msgToSign).digest();
     // const hashBuffer = createHash('sha256').update(msg).digest();
 
 
-    const otherSigner = new DklsDsg.Dsg(userKeyShare, 0, 'm/0', hashBuffer);
+    const otherSigner = new DklsDsg.Dsg(userKeyShare, 0, derivationPath, hashBuffer);
     const userSignerBroadcastMsg1 = await otherSigner.init();
     const signatureShareRound1 = await getSignatureShareRoundOne(userSignerBroadcastMsg1, userGpgKey);
     await sendSignatureShare(
@@ -1073,7 +1074,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
     const bitgoToUserMessages1And2 = latestTxRequest.transactions[0].signatureShares;
     // TODO: Use codec for parsing
     const parsedBitGoToUserSigShareRoundOne = JSON.parse(
-      bitgoToUserMessages1And2[0].share
+      bitgoToUserMessages1And2[1].share
     ) as MPCv2SignatureShareRound1Output;
     if (parsedBitGoToUserSigShareRoundOne.type !== 'round1Output') {
       throw new Error('Unexpected signature share response. Unable to parse data.');
@@ -1116,7 +1117,7 @@ export class EcdsaUtils extends baseTSSUtils<KeyShare> {
     const txRequestSignatureShares = latestTxRequest.transactions[0].signatureShares;
     // TODO: Use codec for parsing
     const parsedBitGoToUserSigShareRoundTwo = JSON.parse(
-      txRequestSignatureShares[0].share
+      txRequestSignatureShares[3].share
     ) as MPCv2SignatureShareRound2Output;
     const serializedBitGoToUserMessagesRound3 = await verifyBitGoMessagesAndSignaturesRoundTwo(
       parsedBitGoToUserSigShareRoundTwo,
